@@ -76,8 +76,43 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        best_score = float("-inf")
+        best_model = None
+        num_features = self.X.shape[1]
+
+        for num_states in range(self.min_n_components, self.max_n_components + 1):
+
+            # train a model based on current number of states/components and find it's score
+
+            try:
+                hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+                # likelihood log
+                logL = hmm_model.score(self.X, self.lengths)
+
+                # log of number of data points
+                logN = np.log(len(self.X))
+                # As discussed here: https://discussions.udacity.com/t/number-of-parameters-bic-calculation/233235/4
+
+                # Initial state occupation probabilities = numStates
+                # Transition probabilities = numStates*(numStates - 1)
+                # Emission probabilities = numStates*numFeatures*2 = numMeans+numCovars
+                # numMeans and numCovars are the number of means and covars calculated. One mean and covar for each state and features. 
+                
+                # Then the total number of parameters are:
+                # Parameters = Initial state occupation probabilities + Transition probabilities + Emission probabilities
+
+                occupation_probabilities = num_states
+                transition_probabilities = num_states * (num_states - 1)
+                emission_probabilities = num_states * num_features * 2
+                p = occupation_probabilities + transition_probabilities + emission_probabilities 
+
+                bic_score = -2 * logL + p * logN
+
+                best_score, best_model = max((best_score, best_model), (bic_score, hmm_model))
+            except:
+                pass
+        return best_model
 
 
 class SelectorDIC(ModelSelector):
