@@ -124,11 +124,58 @@ class SelectorDIC(ModelSelector):
     DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
     '''
 
+    # As discussed here: https://discussions.udacity.com/t/dic-criteria-clarification-of-understanding/233161/2
+    # we are trying to find the model that gives a high likelihood(small negative number) to the original word
+    # and low likelihood(very big negative number) to the other words. 
+    
+    # So DIC score is
+    # DIC = log(P(original world)) - average(log(P(otherwords)))
+
+    # We need to maximize DIC. 
+
+
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        M = len((self.words).keys())  # num of words
+        best_hmm_model = None
+        best_DIC_Score = float('-inf')
+  
+
+        for num_states in range(self.min_n_components, self.max_n_components + 1):
+
+            # train a model based on current number of states/components and find it's score
+
+            try:
+                hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+                # likelihood log
+                logL = hmm_model.score(self.X, self.lengths)
+
+            except:
+                LogL = float("-inf")
+            
+            SumLogL = 0
+
+            for current_word in self.hwords.keys():
+                feature_list_array, feature_list_array_length = self.hwords[current_word]
+
+            try:
+                SumLogL += hmm_model.score(feature_list_array, feature_list_array_length)
+
+            except:
+                SumLogL += 0
+
+            # DIC = log(P(original world)) - average(log(P(otherwords)))
+            # SumLogL - LogL effectively means sum_of_logs(P(allwords) - log(P(original world) i.e. sum_of_logs(P(other_words)
+            DIC_Score = LogL - (1 / (M - 1)) * (SumLogL - (0 if LogL == float("-inf") else LogL))
+
+            # We need to maximize DIC score
+            if DIC_Score > best_DIC_Score:
+                best_DIC_Score = DIC_Score
+                best_hmm_model = hmm_model
+
+        return best_hmm_model
 
 
 class SelectorCV(ModelSelector):
