@@ -177,12 +177,47 @@ class SelectorDIC(ModelSelector):
         return best_hmm_model
 
 class SelectorCV(ModelSelector):
-    ''' select best model based on average log Likelihood of cross-validation folds
+    """
+        CV technique includes breaking-down the training set into "folds",
+        rotating which fold is "left out" of the training set.
+        The fold that is "left out" is scored for validation.
+        Use this as a proxy method of finding the
+        "best" model to use on "unseen data". Higher the CV score the "better" the model.
+    """
 
-    '''
+    def calc_best_score_cv(self, score_cv):
+        return max(score_cv, key = lambda x: x[0])
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+        kf = KFold(n_splits = 3, shuffle = False, random_state = None)
+        log_likelihoods = []
+        score_cvs = []
+
+        for num_states in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                # Check sufficient data to split using KFold
+                if len(self.sequences) > 2:
+                    # Break down the sequences into folds.
+                    for train_index, test_index in kf.split(self.sequences):
+
+                        self.X, self.lengths = combine_sequences(train_index, self.sequences)
+
+                        X_test, lengths_test = combine_sequences(test_index, self.sequences)
+
+                        hmm_model = self.base_model(num_states)
+                        log_likelihood = hmm_model.score(X_test, lengths_test)
+                else:
+                    hmm_model = self.base_model(num_states)
+                    log_likelihood = hmm_model.score(self.X, self.lengths)
+
+                log_likelihoods.append(log_likelihood)
+
+                # Find average Log Likelihood of CV fold
+                score_cvs_avg = np.mean(log_likelihoods)
+                score_cvs.append(tuple([score_cvs_avg, hmm_model]))
+
+            except Exception as e:
+                pass
+        return self.calc_best_score_cv(score_cvs)[1] if score_cvs else None
